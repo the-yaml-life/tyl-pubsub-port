@@ -25,6 +25,17 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 tokio = { version = "1.0", features = ["full"] }
 fastrand = "2.0"
+futures = "0.3"
+
+# NEW: Pact and validation dependencies
+pact_consumer = { version = "1.0", features = ["datetime"], optional = true }
+pact_models = { version = "1.0", optional = true }
+schemars = { version = "0.8", features = ["chrono", "uuid"], optional = true }
+jsonschema = { version = "0.17", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
+
+[features]
+default = []
+pact-validation = ["pact_consumer", "pact_models", "schemars", "jsonschema"]

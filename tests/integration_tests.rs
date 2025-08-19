@@ -24,6 +24,7 @@ impl TestHandler {
         }
     }
 
+    #[allow(dead_code)]
     fn get_processed_events(&self) -> Vec<String> {
         self.processed_events.lock().unwrap().clone()
     }

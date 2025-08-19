@@ -67,11 +67,13 @@ pub type PubSubResult<T> = TylResult<T>;
 pub mod mock;
 pub mod traits;
 pub mod types;
+pub mod validation;
+pub mod macros;
 
 // Re-exports for public API - specific to avoid ambiguity
 // Traits
 pub use traits::dlq::*;
-pub use traits::handler::*;
+pub use traits::handler::{EventHandler, HandlerResult, HandlerError, HandlerInfo};
 pub use traits::monitoring::*;
 pub use traits::publisher::*;
 pub use traits::retry::*;
@@ -87,7 +89,24 @@ pub use types::store::*;
 pub use types::subscription::*;
 
 // Mock implementation
-pub use mock::MockPubSubAdapter;
+pub use mock::{MockPubSubAdapter, ValidatedMockAdapter};
+
+// Pact validation publisher (compile-time safety)
+#[cfg(feature = "pact-validation")]
+pub use mock::validated_adapter::PactEventPublisher;
+
+// Validation re-exports (conditional on feature)
+#[cfg(feature = "pact-validation")]
+pub use validation::{
+    PactValidated, ContractValidator, ValidationError,
+    ValidatedEventPublisher, ValidatedEventSubscriber, PubSubValidationExt
+};
+
+// Auto-validation re-exports (always available)
+pub use validation::PactEventValidator;
+
+// Re-export macros
+// Note: Macros are automatically available when using the crate
 
 #[cfg(test)]
 mod tests {
