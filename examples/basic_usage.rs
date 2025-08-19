@@ -1,64 +1,99 @@
-use tyl_{module_name}::{BasicAdapter, MainTrait, MainType};
+use serde::{Deserialize, Serialize};
+use tyl_pubsub_port::{EventMonitoring, EventPublisher, MockPubSubAdapter};
 
-fn main() {
-    println!("=== TYL {Module Name} Basic Usage ===\n");
+#[derive(Debug, Serialize, Deserialize)]
+struct SimpleEvent {
+    message: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("=== TYL PubSub Port Basic Usage ===\n");
 
     // Basic usage example
-    basic_usage_example();
-    
-    // Custom configuration example
-    custom_config_example();
-    
-    // Error handling example
-    error_handling_example();
+    basic_usage_example().await?;
+
+    // Multiple events example
+    multiple_events_example().await?;
+
+    // Health check example
+    health_check_example().await?;
+
+    Ok(())
 }
 
-fn basic_usage_example() {
+async fn basic_usage_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- Basic Usage ---");
-    
-    let config = MainType::new("my-service");
-    let adapter = BasicAdapter::new(config);
-    
-    match adapter.operation("test input") {
-        Ok(result) => println!("✅ Success: {}", result),
-        Err(e) => println!("❌ Error: {}", e),
-    }
-    
+
+    let pubsub = MockPubSubAdapter::new();
+
+    let event = SimpleEvent {
+        message: "Hello, PubSub!".to_string(),
+        timestamp: chrono::Utc::now(),
+    };
+
+    let event_id = pubsub.publish("test.events", event).await?;
+    println!("✅ Published event with ID: {}", event_id);
+
     println!();
+    Ok(())
 }
 
-fn custom_config_example() {
-    println!("--- Custom Configuration ---");
-    
-    let config = MainType::new("custom-service");
-    let adapter = BasicAdapter::new(config);
-    
-    // Example with different inputs
-    let inputs = vec!["hello", "world", "rust"];
-    
-    for input in inputs {
-        match adapter.operation(input) {
-            Ok(result) => println!("  {} -> {}", input, result),
-            Err(e) => println!("  {} -> Error: {}", input, e),
+async fn multiple_events_example() -> Result<(), Box<dyn std::error::Error>> {
+    println!("--- Multiple Events ---");
+
+    let pubsub = MockPubSubAdapter::new();
+
+    // Publish multiple events
+    let events = vec![
+        SimpleEvent {
+            message: "First event".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
+        SimpleEvent {
+            message: "Second event".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
+        SimpleEvent {
+            message: "Third event".to_string(),
+            timestamp: chrono::Utc::now(),
+        },
+    ];
+
+    for (i, event) in events.into_iter().enumerate() {
+        let event_id = pubsub.publish("test.events", event).await?;
+        println!("  Event {} published with ID: {}", i + 1, event_id);
+    }
+
+    println!("✅ All events published successfully");
+    println!();
+    Ok(())
+}
+
+async fn health_check_example() -> Result<(), Box<dyn std::error::Error>> {
+    println!("--- Health Check ---");
+
+    let pubsub = MockPubSubAdapter::new();
+
+    // Check system health
+    let health = pubsub.health_check().await?;
+    println!("✅ System health: {:?}", health.status);
+    println!("   Uptime: {:?}", health.uptime);
+    println!("   Components: {}", health.components.len());
+
+    // Check connection status
+    let connection = pubsub.connection_status().await?;
+    println!(
+        "🔗 Connection status: {}",
+        if connection.connected {
+            "Connected"
+        } else {
+            "Disconnected"
         }
-    }
-    
-    println!();
-}
+    );
+    println!("   Active connections: {}", connection.active_connections);
 
-fn error_handling_example() {
-    println!("--- Error Handling ---");
-    
-    let adapter = BasicAdapter::default();
-    
-    // This should work
-    match adapter.operation("valid input") {
-        Ok(result) => println!("✅ Valid input processed: {}", result),
-        Err(e) => println!("❌ Unexpected error: {}", e),
-    }
-    
-    // Example of error handling (implement error cases in your module)
-    println!("💡 Add error cases to demonstrate error handling in your module");
-    
     println!();
+    Ok(())
 }
