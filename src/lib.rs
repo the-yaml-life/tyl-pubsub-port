@@ -64,16 +64,16 @@ pub use tyl_errors::{TylError, TylResult};
 pub type PubSubResult<T> = TylResult<T>;
 
 // Module declarations
+pub mod macros;
 pub mod mock;
 pub mod traits;
 pub mod types;
 pub mod validation;
-pub mod macros;
 
 // Re-exports for public API - specific to avoid ambiguity
 // Traits
 pub use traits::dlq::*;
-pub use traits::handler::{EventHandler, HandlerResult, HandlerError, HandlerInfo};
+pub use traits::handler::{EventHandler, HandlerError, HandlerInfo, HandlerResult};
 pub use traits::monitoring::*;
 pub use traits::publisher::*;
 pub use traits::retry::*;
@@ -98,8 +98,8 @@ pub use mock::validated_adapter::PactEventPublisher;
 // Validation re-exports (conditional on feature)
 #[cfg(feature = "pact-validation")]
 pub use validation::{
-    PactValidated, ContractValidator, ValidationError,
-    ValidatedEventPublisher, ValidatedEventSubscriber, PubSubValidationExt
+    ContractValidator, PactValidated, PubSubValidationExt, ValidatedEventPublisher,
+    ValidatedEventSubscriber, ValidationError,
 };
 
 // Auto-validation re-exports (always available)

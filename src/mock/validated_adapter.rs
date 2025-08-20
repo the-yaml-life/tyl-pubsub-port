@@ -1,29 +1,29 @@
 //! Mock implementation with Pact validation for testing and demonstration
 
+use crate::mock::MockPubSubAdapter;
+use crate::{EventHandler, EventId, EventPublisher, EventSubscriber, PubSubResult, SubscriptionId};
+use async_trait::async_trait;
 #[cfg(feature = "pact-validation")]
 use std::sync::{Arc, Mutex};
-use async_trait::async_trait;
-use crate::{EventPublisher, EventSubscriber, EventHandler, SubscriptionId, PubSubResult, EventId};
-use crate::mock::MockPubSubAdapter;
 
 #[cfg(feature = "pact-validation")]
 use crate::validation::{
-    PactValidated, ContractValidator, ValidatedEventPublisher, ValidatedEventSubscriber
+    ContractValidator, PactValidated, ValidatedEventPublisher, ValidatedEventSubscriber,
 };
 
 /// Extended mock adapter with Pact validation capabilities
-/// 
+///
 /// This extends the existing MockPubSubAdapter with contract validation,
 /// allowing tests to verify that producers and consumers are compatible.
 #[derive(Clone)]
 pub struct ValidatedMockAdapter {
     /// The underlying mock adapter
     inner: MockPubSubAdapter,
-    
+
     /// Contract validator for managing producer/consumer contracts
     #[cfg(feature = "pact-validation")]
     validator: Arc<Mutex<ContractValidator>>,
-    
+
     /// Service name for this adapter instance
     service_name: String,
 }
@@ -65,7 +65,7 @@ impl ValidatedMockAdapter {
     }
 
     /// Simulate another service registering as consumer
-    /// 
+    ///
     /// This is useful for testing scenarios where you need to simulate
     /// external services that consume your events.
     #[cfg(feature = "pact-validation")]
@@ -77,7 +77,7 @@ impl ValidatedMockAdapter {
     }
 
     /// Simulate another service registering as producer
-    /// 
+    ///
     /// This is useful for testing scenarios where you need to simulate
     /// external services that produce events you consume.
     #[cfg(feature = "pact-validation")]
@@ -113,12 +113,20 @@ pub trait PactEventPublisher: Send + Sync {
     /// Publish a pact-validated event to a topic
     async fn publish<T>(&self, topic: &str, event: T) -> PubSubResult<EventId>
     where
-        T: serde::Serialize + Send + Sync + crate::validation::PactEventValidator + crate::validation::PactValidated;
+        T: serde::Serialize
+            + Send
+            + Sync
+            + crate::validation::PactEventValidator
+            + crate::validation::PactValidated;
 
     /// Publish a pact-validated event with a specific partition key
     async fn publish_with_key<T>(&self, topic: &str, key: &str, event: T) -> PubSubResult<EventId>
     where
-        T: serde::Serialize + Send + Sync + crate::validation::PactEventValidator + crate::validation::PactValidated;
+        T: serde::Serialize
+            + Send
+            + Sync
+            + crate::validation::PactEventValidator
+            + crate::validation::PactValidated;
 }
 
 // ValidatedMockAdapter implements its own strict interface
@@ -126,7 +134,11 @@ pub trait PactEventPublisher: Send + Sync {
 impl PactEventPublisher for ValidatedMockAdapter {
     async fn publish<T>(&self, topic: &str, event: T) -> PubSubResult<EventId>
     where
-        T: serde::Serialize + Send + Sync + crate::validation::PactEventValidator + crate::validation::PactValidated,
+        T: serde::Serialize
+            + Send
+            + Sync
+            + crate::validation::PactEventValidator
+            + crate::validation::PactValidated,
     {
         // ALWAYS check if it's a pact event - should always be true due to trait bound
         if !event.is_pact_event() {
@@ -135,24 +147,28 @@ impl PactEventPublisher for ValidatedMockAdapter {
                 std::any::type_name::<T>()
             )));
         }
-        
+
         // Validate the pact event schema
         event.validate_pact_schema()?;
-        
+
         // CRITICAL: Consumer validation - this is what makes test_orphaned_event_fails fail correctly!
         #[cfg(feature = "pact-validation")]
         {
             use crate::validation::extended_traits::ValidatedEventPublisher;
             self.validate_consumer_compatibility(&event).await?;
         }
-        
+
         // Proceed with normal publishing
         self.inner.publish(topic, event).await
     }
 
     async fn publish_with_key<T>(&self, topic: &str, key: &str, event: T) -> PubSubResult<EventId>
     where
-        T: serde::Serialize + Send + Sync + crate::validation::PactEventValidator + crate::validation::PactValidated,
+        T: serde::Serialize
+            + Send
+            + Sync
+            + crate::validation::PactEventValidator
+            + crate::validation::PactValidated,
     {
         // ALWAYS check if it's a pact event - should always be true due to trait bound
         if !event.is_pact_event() {
@@ -161,22 +177,22 @@ impl PactEventPublisher for ValidatedMockAdapter {
                 std::any::type_name::<T>()
             )));
         }
-        
+
         // Validate the pact event schema
         event.validate_pact_schema()?;
-        
-        // CRITICAL: Consumer validation 
+
+        // CRITICAL: Consumer validation
         #[cfg(feature = "pact-validation")]
         {
             use crate::validation::extended_traits::ValidatedEventPublisher;
             self.validate_consumer_compatibility(&event).await?;
         }
-        
+
         self.inner.publish_with_key(topic, key, event).await
     }
 }
 
-// ValidatedMockAdapter also implements basic EventPublisher for compatibility 
+// ValidatedMockAdapter also implements basic EventPublisher for compatibility
 // but it will reject non-pact events at runtime
 #[async_trait]
 impl EventPublisher for ValidatedMockAdapter {
@@ -194,7 +210,12 @@ impl EventPublisher for ValidatedMockAdapter {
         )));
     }
 
-    async fn publish_with_key<T>(&self, _topic: &str, _key: &str, _event: T) -> PubSubResult<EventId>
+    async fn publish_with_key<T>(
+        &self,
+        _topic: &str,
+        _key: &str,
+        _event: T,
+    ) -> PubSubResult<EventId>
     where
         T: serde::Serialize + Send + Sync,
     {
@@ -204,7 +225,10 @@ impl EventPublisher for ValidatedMockAdapter {
         )));
     }
 
-    async fn publish_batch<T>(&self, _events: Vec<crate::TopicEvent<T>>) -> PubSubResult<Vec<EventId>>
+    async fn publish_batch<T>(
+        &self,
+        _events: Vec<crate::TopicEvent<T>>,
+    ) -> PubSubResult<Vec<EventId>>
     where
         T: serde::Serialize + Send + Sync,
     {
@@ -239,7 +263,7 @@ impl EventPublisher for ValidatedMockAdapter {
     }
 }
 
-// Delegate basic EventSubscriber to the inner adapter  
+// Delegate basic EventSubscriber to the inner adapter
 #[async_trait]
 impl EventSubscriber for ValidatedMockAdapter {
     async fn subscribe<T>(
@@ -262,7 +286,9 @@ impl EventSubscriber for ValidatedMockAdapter {
     where
         T: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
-        self.inner.subscribe_with_options(topic, options, handler).await
+        self.inner
+            .subscribe_with_options(topic, options, handler)
+            .await
     }
 
     async fn subscribe_consumer_group<T>(
@@ -274,7 +300,9 @@ impl EventSubscriber for ValidatedMockAdapter {
     where
         T: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
-        self.inner.subscribe_consumer_group(topic, consumer_group, handler).await
+        self.inner
+            .subscribe_consumer_group(topic, consumer_group, handler)
+            .await
     }
 
     async fn subscribe_multiple<T>(
@@ -325,20 +353,26 @@ impl ValidatedEventPublisher for ValidatedMockAdapter {
         self.inner.publish(topic, event).await
     }
 
-    async fn validate_consumer_compatibility<T: PactValidated>(&self, event: &T) -> PubSubResult<()> {
+    async fn validate_consumer_compatibility<T: PactValidated>(
+        &self,
+        event: &T,
+    ) -> PubSubResult<()> {
         self.validator
             .lock()
             .unwrap()
             .validate_consumer_compatibility(event)
     }
 
-    async fn register_producer_contract<T: PactValidated>(&self, service_name: &str) -> PubSubResult<()> {
+    async fn register_producer_contract<T: PactValidated>(
+        &self,
+        service_name: &str,
+    ) -> PubSubResult<()> {
         let example = T::example();
         self.validator
             .lock()
             .unwrap()
             .register_provider_verification(&example, service_name);
-        
+
         Ok(())
     }
 
@@ -350,13 +384,16 @@ impl ValidatedEventPublisher for ValidatedMockAdapter {
 #[cfg(feature = "pact-validation")]
 #[async_trait]
 impl ValidatedEventSubscriber for ValidatedMockAdapter {
-    async fn register_consumer_contract<T: PactValidated>(&self, service_name: &str) -> PubSubResult<()> {
+    async fn register_consumer_contract<T: PactValidated>(
+        &self,
+        service_name: &str,
+    ) -> PubSubResult<()> {
         let example = T::example();
         self.validator
             .lock()
             .unwrap()
             .register_consumer_expectation(&example, service_name);
-        
+
         Ok(())
     }
 
@@ -380,7 +417,7 @@ mod tests {
             pub name: String,
             pub value: i32,
         }
-        
+
         event_type = "test.event.v1",
         example = TestEvent {
             id: "test-123".to_string(),
@@ -416,7 +453,7 @@ mod tests {
     }
 
     #[cfg(feature = "pact-validation")]
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_validated_publish_fails_no_consumers() {
         let adapter = ValidatedMockAdapter::reliable("test-service");
 
@@ -433,7 +470,9 @@ mod tests {
     async fn test_producer_contract_registration() {
         let adapter = ValidatedMockAdapter::reliable("producer-service");
 
-        let result = adapter.register_producer_contract::<TestEvent>("producer-service").await;
+        let result = adapter
+            .register_producer_contract::<TestEvent>("producer-service")
+            .await;
         assert!(result.is_ok());
 
         let report = adapter.get_contract_report();
@@ -445,7 +484,9 @@ mod tests {
     async fn test_consumer_contract_registration() {
         let adapter = ValidatedMockAdapter::reliable("consumer-service");
 
-        let result = adapter.register_consumer_contract::<TestEvent>("consumer-service").await;
+        let result = adapter
+            .register_consumer_contract::<TestEvent>("consumer-service")
+            .await;
         assert!(result.is_ok());
 
         let report = adapter.get_contract_report();
@@ -456,28 +497,27 @@ mod tests {
     #[tokio::test]
     async fn test_contract_clearing() {
         let adapter = ValidatedMockAdapter::reliable("test-service");
-        
+
         // Register some contracts
         adapter.simulate_consumer_registration("test.event.v1", "consumer-service");
         adapter.simulate_producer_registration("test.event.v1", "producer-service");
-        
+
         // Verify contracts exist
         let report = adapter.get_contract_report();
         assert!(!report.event_contracts.is_empty());
-        
+
         // Clear contracts
         adapter.clear_contracts();
-        
+
         // Verify contracts are cleared
         let report = adapter.get_contract_report();
         assert!(report.event_contracts.is_empty());
     }
 }
 
-
 // NO implementations for basic types like serde_json::Value, String, etc.
 // This FORCES all events to be created with pact_event! macro
-// 
+//
 // If someone tries to publish serde_json::Value, they'll get a compile error:
 // "the trait bound `serde_json::Value: PactEventValidator` is not satisfied"
 //

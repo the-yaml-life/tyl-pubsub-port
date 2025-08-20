@@ -1,29 +1,29 @@
 //! Extended traits that add Pact validation to existing EventPublisher and EventSubscriber
 
-use async_trait::async_trait;
-use crate::{EventPublisher, EventSubscriber, EventHandler, SubscriptionId, PubSubResult, EventId};
 use crate::validation::traits::PactValidated;
 use crate::validation::validator::ContractValidator;
+use crate::{EventHandler, EventId, EventPublisher, EventSubscriber, PubSubResult, SubscriptionId};
+use async_trait::async_trait;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 /// Extended EventPublisher trait with automatic Pact contract validation
-/// 
+///
 /// This trait extends the base EventPublisher with contract validation capabilities,
 /// ensuring that events are only published when compatible consumers are registered.
 #[async_trait]
 pub trait ValidatedEventPublisher: EventPublisher {
     /// Publish an event with automatic Pact contract validation
-    /// 
+    ///
     /// This method:
     /// 1. Validates the event against its JSON schema
     /// 2. Checks if consumers are registered for this event type
     /// 3. Validates consumer compatibility
     /// 4. Publishes the event if all validations pass
-    /// 
+    ///
     /// # Arguments
     /// * `event` - The event to publish (must implement PactValidated)
-    /// 
+    ///
     /// # Returns
     /// * `Ok(EventId)` - If validation passes and event is published
     /// * `Err(TylError)` - If validation fails or no consumers registered
@@ -35,44 +35,50 @@ pub trait ValidatedEventPublisher: EventPublisher {
         self.validate_consumer_compatibility(&event).await?;
 
         // 3. Publish if valid (using the topic from event metadata or a default)
-        let topic = event.event_type();  // Use event type as topic for now
+        let topic = event.event_type(); // Use event type as topic for now
         self.publish(topic, event).await
     }
 
     /// Check if consumers can handle this event type and schema
-    /// 
+    ///
     /// This should be implemented by concrete adapters to check their
     /// registered consumers and validate compatibility.
-    async fn validate_consumer_compatibility<T: PactValidated>(&self, event: &T) -> PubSubResult<()>;
+    async fn validate_consumer_compatibility<T: PactValidated>(
+        &self,
+        event: &T,
+    ) -> PubSubResult<()>;
 
     /// Register this service as a producer of an event type
-    /// 
+    ///
     /// This creates a provider verification that can be used in contract tests
-    async fn register_producer_contract<T: PactValidated>(&self, service_name: &str) -> PubSubResult<()>;
+    async fn register_producer_contract<T: PactValidated>(
+        &self,
+        service_name: &str,
+    ) -> PubSubResult<()>;
 
     /// Get the contract validator for this publisher (if available)
-    /// 
+    ///
     /// Allows access to the underlying validator for advanced operations
     fn get_contract_validator(&self) -> Option<Arc<Mutex<ContractValidator>>>;
 }
 
 /// Extended EventSubscriber trait with automatic consumer contract registration
-/// 
+///
 /// This trait extends the base EventSubscriber with contract registration capabilities,
 /// automatically registering the service as a consumer and validating incoming events.
-#[async_trait] 
+#[async_trait]
 pub trait ValidatedEventSubscriber: EventSubscriber {
     /// Subscribe to events with automatic consumer contract registration
-    /// 
+    ///
     /// This method:
     /// 1. Registers the service as a consumer of this event type
     /// 2. Wraps the provided handler with validation logic
     /// 3. Sets up the subscription with the validated handler
-    /// 
+    ///
     /// # Arguments
     /// * `service_name` - Name of the consuming service (for contract registration)
     /// * `handler` - Event handler to process validated events
-    /// 
+    ///
     /// # Returns
     /// * `Ok(SubscriptionId)` - If registration and subscription succeed
     /// * `Err(TylError)` - If registration or subscription fails
@@ -90,24 +96,27 @@ pub trait ValidatedEventSubscriber: EventSubscriber {
         // 2. Wrap handler with validation
         let validated_handler = ValidatedEventHandler::new(handler);
 
-        // 3. Subscribe with validated handler  
+        // 3. Subscribe with validated handler
         let topic = T::example().event_type(); // Use event type as topic
         self.subscribe(topic, Box::new(validated_handler)).await
     }
 
     /// Register this service as a consumer of an event type
-    /// 
+    ///
     /// This creates a consumer expectation that can be used in contract tests
-    async fn register_consumer_contract<T: PactValidated>(&self, service_name: &str) -> PubSubResult<()>;
+    async fn register_consumer_contract<T: PactValidated>(
+        &self,
+        service_name: &str,
+    ) -> PubSubResult<()>;
 
     /// Get the contract validator for this subscriber (if available)
-    /// 
+    ///
     /// Allows access to the underlying validator for advanced operations
     fn get_contract_validator(&self) -> Option<Arc<Mutex<ContractValidator>>>;
 }
 
 /// Event handler wrapper that adds validation to incoming events
-/// 
+///
 /// This wrapper validates events before passing them to the underlying handler
 struct ValidatedEventHandler<T> {
     inner_handler: Box<dyn EventHandler<T>>,
@@ -126,9 +135,11 @@ where
 {
     async fn handle(&self, event: crate::Event<T>) -> crate::HandlerResult {
         // Validate incoming event payload before processing
-        event.payload.validate_schema()
-            .map_err(|e| crate::HandlerError::InvalidEventFormat { 
-                details: e.to_string() 
+        event
+            .payload
+            .validate_schema()
+            .map_err(|e| crate::HandlerError::InvalidEventFormat {
+                details: e.to_string(),
             })?;
 
         println!("✅ Event {} passed validation", event.payload.event_type());
@@ -139,22 +150,25 @@ where
 }
 
 /// Helper trait for easy adoption of validated publishing
-/// 
+///
 /// Provides convenience methods that combine validation and publishing
 pub trait PubSubValidationExt: ValidatedEventPublisher + ValidatedEventSubscriber {
     /// Publish multiple validated events in a batch
-    fn publish_validated_batch<T: PactValidated>(&self, events: Vec<T>) -> impl std::future::Future<Output = PubSubResult<Vec<EventId>>> + Send
+    fn publish_validated_batch<T: PactValidated>(
+        &self,
+        events: Vec<T>,
+    ) -> impl std::future::Future<Output = PubSubResult<Vec<EventId>>> + Send
     where
         Self: Send + Sync,
     {
         async move {
             let mut event_ids = Vec::new();
-            
+
             for event in events {
                 let event_id = self.publish_validated(event).await?;
                 event_ids.push(event_id);
             }
-            
+
             Ok(event_ids)
         }
     }
@@ -184,10 +198,10 @@ impl<T> PubSubValidationExt for T where T: ValidatedEventPublisher + ValidatedEv
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{Serialize, Deserialize};
     use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    
+
     #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
     struct TestEvent {
         pub id: String,
@@ -201,7 +215,7 @@ mod tests {
                 message: "test message".to_string(),
             }
         }
-        
+
         fn event_type(&self) -> &'static str {
             "test.event.v1"
         }
@@ -237,12 +251,12 @@ mod tests {
     async fn test_validated_event_handler() {
         let inner_handler = TestHandler::new();
         let call_count_ref = inner_handler.call_count.clone();
-        
+
         let validated_handler = ValidatedEventHandler::new(Box::new(inner_handler));
-        
+
         let event = crate::Event::new("test.topic", TestEvent::example());
         let result = validated_handler.handle(event).await;
-        
+
         assert!(result.is_ok());
         assert_eq!(call_count_ref.load(Ordering::SeqCst), 1);
     }
@@ -253,10 +267,10 @@ mod tests {
         // For now, we just verify the handler works with valid events
         let inner_handler = TestHandler::new();
         let validated_handler = ValidatedEventHandler::new(Box::new(inner_handler));
-        
+
         let event = crate::Event::new("test.topic", TestEvent::example());
         let result = validated_handler.handle(event).await;
-        
+
         assert!(result.is_ok());
     }
 }

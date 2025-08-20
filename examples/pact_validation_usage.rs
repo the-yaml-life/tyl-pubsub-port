@@ -91,19 +91,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Define events using the macro
     define_events_example().await?;
-    
+
     // Basic validation example
     basic_validation_example().await?;
-    
+
     // Producer/Consumer contract example
     producer_consumer_example().await?;
-    
+
     // Contract violation example
     contract_violation_example().await?;
-    
+
     // Contract reporting example
     contract_reporting_example().await?;
-    
+
     // Batch publishing example
     batch_publishing_example().await?;
 
@@ -116,8 +116,14 @@ async fn define_events_example() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("✅ Events defined with automatic validation support");
     println!("   - OrderPlaced: {}", OrderPlaced::example().event_type());
-    println!("   - PaymentProcessed: {}", payment_events::PaymentProcessed::example().event_type());
-    println!("   - PaymentFailed: {}", payment_events::PaymentFailed::example().event_type());
+    println!(
+        "   - PaymentProcessed: {}",
+        payment_events::PaymentProcessed::example().event_type()
+    );
+    println!(
+        "   - PaymentFailed: {}",
+        payment_events::PaymentFailed::example().event_type()
+    );
     println!();
 
     Ok(())
@@ -131,7 +137,7 @@ async fn basic_validation_example() -> Result<(), Box<dyn std::error::Error>> {
 
     // Try to publish without consumers - should fail
     let order = OrderPlaced::example();
-    
+
     println!("🚫 Attempting to publish without registered consumers...");
     match adapter.publish_validated(order.clone()).await {
         Ok(_) => println!("   Unexpected success!"),
@@ -143,7 +149,7 @@ async fn basic_validation_example() -> Result<(), Box<dyn std::error::Error>> {
     adapter.simulate_consumer_registration("ecommerce.order.placed.v1", "payment-service");
     adapter.simulate_consumer_registration("ecommerce.order.placed.v1", "inventory-service");
     adapter.simulate_consumer_registration("ecommerce.order.placed.v1", "notification-service");
-    
+
     println!("✅ Publishing with registered consumers...");
     match adapter.publish_validated(order).await {
         Ok(event_id) => println!("   ✅ Published successfully with ID: {}", event_id),
@@ -161,16 +167,22 @@ async fn producer_consumer_example() -> Result<(), Box<dyn std::error::Error>> {
     // Set up producer service
     let order_service = ValidatedMockAdapter::new("order-service");
     println!("📤 Setting up order-service as producer");
-    order_service.register_producer_contract::<OrderPlaced>("order-service").await?;
+    order_service
+        .register_producer_contract::<OrderPlaced>("order-service")
+        .await?;
 
     // Set up consumer services
     let payment_service = ValidatedMockAdapter::new("payment-service");
     println!("📥 Setting up payment-service as consumer");
-    payment_service.register_consumer_contract::<OrderPlaced>("payment-service").await?;
+    payment_service
+        .register_consumer_contract::<OrderPlaced>("payment-service")
+        .await?;
 
     let inventory_service = ValidatedMockAdapter::new("inventory-service");
     println!("📥 Setting up inventory-service as consumer");
-    inventory_service.register_consumer_contract::<OrderPlaced>("inventory-service").await?;
+    inventory_service
+        .register_consumer_contract::<OrderPlaced>("inventory-service")
+        .await?;
 
     // Register consumers in the producer
     order_service.simulate_consumer_registration("ecommerce.order.placed.v1", "payment-service");
@@ -181,14 +193,12 @@ async fn producer_consumer_example() -> Result<(), Box<dyn std::error::Error>> {
         order_id: "ORD-EXAMPLE-001".to_string(),
         customer_id: "CUST-EXAMPLE".to_string(),
         total_amount: 450.00,
-        items: vec![
-            OrderItem {
-                sku: "MONITOR-001".to_string(),
-                name: "4K Monitor".to_string(),
-                price: 450.00,
-                quantity: 1,
-            }
-        ],
+        items: vec![OrderItem {
+            sku: "MONITOR-001".to_string(),
+            name: "4K Monitor".to_string(),
+            price: 450.00,
+            quantity: 1,
+        }],
         placed_at: chrono::Utc::now(),
     };
 
@@ -230,7 +240,7 @@ async fn contract_violation_example() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     let orphaned = OrphanedEvent::example();
-    
+
     println!("🚫 Attempting to publish orphaned event (no consumers)...");
     match adapter.publish_validated(orphaned).await {
         Ok(_) => println!("   🚨 This shouldn't happen!"),
@@ -243,7 +253,7 @@ async fn contract_violation_example() -> Result<(), Box<dyn std::error::Error>> 
     // Show what happens when we fix it
     println!("🔧 Registering a consumer to fix the contract...");
     adapter.simulate_consumer_registration("orphaned.event.v1", "rescue-service");
-    
+
     let orphaned = OrphanedEvent::example();
     match adapter.publish_validated(orphaned).await {
         Ok(event_id) => println!("   ✅ Now publishes successfully: {}", event_id),
@@ -259,48 +269,67 @@ async fn contract_reporting_example() -> Result<(), Box<dyn std::error::Error>> 
     println!("--- 5. Contract Reporting Example ---");
 
     let service = ValidatedMockAdapter::new("multi-service");
-    
+
     // Set up various contracts
-    service.register_producer_contract::<OrderPlaced>("multi-service").await?;
-    service.register_consumer_contract::<payment_events::PaymentProcessed>("multi-service").await?;
-    service.register_consumer_contract::<payment_events::PaymentFailed>("multi-service").await?;
-    
+    service
+        .register_producer_contract::<OrderPlaced>("multi-service")
+        .await?;
+    service
+        .register_consumer_contract::<payment_events::PaymentProcessed>("multi-service")
+        .await?;
+    service
+        .register_consumer_contract::<payment_events::PaymentFailed>("multi-service")
+        .await?;
+
     // Add some simulated external consumers and producers
     service.simulate_consumer_registration("ecommerce.order.placed.v1", "external-payment-service");
-    service.simulate_consumer_registration("ecommerce.order.placed.v1", "external-analytics-service");
-    service.simulate_producer_registration("ecommerce.payment.processed.v1", "external-payment-processor");
+    service
+        .simulate_consumer_registration("ecommerce.order.placed.v1", "external-analytics-service");
+    service.simulate_producer_registration(
+        "ecommerce.payment.processed.v1",
+        "external-payment-processor",
+    );
 
     // Generate comprehensive report
     let report = service.get_contract_report();
-    
+
     println!("📊 Contract Report for: {}", report.service_name);
-    println!("📅 Generated at: {}", report.generated_at.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!(
+        "📅 Generated at: {}",
+        report.generated_at.format("%Y-%m-%d %H:%M:%S UTC")
+    );
     println!("📋 Total event types: {}", report.event_contracts.len());
     println!();
 
     for (event_type, contract) in &report.event_contracts {
         println!("🔖 Event: {}", event_type);
-        
+
         if let Some(producer) = &contract.producer {
             println!("   📤 Producer: {}", producer);
         } else {
             println!("   📤 Producer: None");
         }
-        
+
         if contract.consumers.is_empty() {
             println!("   📥 Consumers: None");
         } else {
             println!("   📥 Consumers: {:?}", contract.consumers);
         }
-        
-        println!("   📝 Has Expectations: {}", contract.has_consumer_expectations);
-        println!("   ✅ Has Verification: {}", contract.has_provider_verification);
-        
+
+        println!(
+            "   📝 Has Expectations: {}",
+            contract.has_consumer_expectations
+        );
+        println!(
+            "   ✅ Has Verification: {}",
+            contract.has_provider_verification
+        );
+
         // This would be a warning in real monitoring
         if contract.consumers.is_empty() && contract.producer.is_some() {
             println!("   ⚠️  WARNING: Producer without consumers!");
         }
-        
+
         println!();
     }
 
@@ -312,10 +341,11 @@ async fn batch_publishing_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- 6. Batch Publishing Example ---");
 
     let adapter = ValidatedMockAdapter::new("batch-service");
-    
+
     // Register consumers for our events
     adapter.simulate_consumer_registration("ecommerce.order.placed.v1", "payment-service");
-    adapter.simulate_consumer_registration("ecommerce.payment.processed.v1", "notification-service");
+    adapter
+        .simulate_consumer_registration("ecommerce.payment.processed.v1", "notification-service");
 
     // Create a batch of different events
     let orders = vec![
@@ -347,7 +377,7 @@ async fn batch_publishing_example() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("📦 Publishing batch of {} orders...", orders.len());
     let event_ids = adapter.publish_validated_batch(orders).await?;
-    
+
     println!("✅ Batch published successfully!");
     for (i, event_id) in event_ids.iter().enumerate() {
         println!("   Order {} -> Event ID: {}", i + 1, event_id);
@@ -373,7 +403,7 @@ async fn batch_publishing_example() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("💳 Publishing batch of {} payments...", payments.len());
     let payment_ids = adapter.publish_validated_batch(payments).await?;
-    
+
     println!("✅ Payment batch published successfully!");
     for (i, event_id) in payment_ids.iter().enumerate() {
         println!("   Payment {} -> Event ID: {}", i + 1, event_id);

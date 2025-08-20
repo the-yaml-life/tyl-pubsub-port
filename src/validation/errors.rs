@@ -1,7 +1,7 @@
 //! Error types for contract validation
 
-use thiserror::Error;
 use crate::TylError;
+use thiserror::Error;
 
 /// Contract validation specific errors
 #[derive(Error, Debug, Clone)]
@@ -40,36 +40,40 @@ pub enum ValidationError {
 impl From<ValidationError> for TylError {
     fn from(error: ValidationError) -> Self {
         match error {
-            ValidationError::NoConsumersRegistered(event_type) => {
-                TylError::validation("contract", format!("No consumers registered for event type: {event_type}"))
-            }
+            ValidationError::NoConsumersRegistered(event_type) => TylError::validation(
+                "contract",
+                format!("No consumers registered for event type: {event_type}"),
+            ),
             ValidationError::SchemaCompilationFailed(msg) => {
                 TylError::validation("schema", format!("Schema compilation failed: {msg}"))
             }
-            ValidationError::SchemaValidationFailed { errors } => {
-                TylError::validation("schema", format!("Schema validation failed: {}", errors.join(", ")))
-            }
-            ValidationError::SerializationFailed(msg) => {
-                TylError::serialization(msg)
-            }
+            ValidationError::SchemaValidationFailed { errors } => TylError::validation(
+                "schema",
+                format!("Schema validation failed: {}", errors.join(", ")),
+            ),
+            ValidationError::SerializationFailed(msg) => TylError::serialization(msg),
             ValidationError::ContractIncompatible(msg) => {
                 TylError::validation("contract", format!("Contract incompatible: {msg}"))
             }
-            ValidationError::ProducerNotRegistered(event_type) => {
-                TylError::validation("contract", format!("Producer not registered for event type: {event_type}"))
-            }
-            ValidationError::ConsumerValidationFailed { message } => {
-                TylError::validation("consumer", format!("Consumer contract validation failed: {message}"))
-            }
-            ValidationError::ProducerValidationFailed { message } => {
-                TylError::validation("producer", format!("Producer contract validation failed: {message}"))
-            }
+            ValidationError::ProducerNotRegistered(event_type) => TylError::validation(
+                "contract",
+                format!("Producer not registered for event type: {event_type}"),
+            ),
+            ValidationError::ConsumerValidationFailed { message } => TylError::validation(
+                "consumer",
+                format!("Consumer contract validation failed: {message}"),
+            ),
+            ValidationError::ProducerValidationFailed { message } => TylError::validation(
+                "producer",
+                format!("Producer contract validation failed: {message}"),
+            ),
             ValidationError::PactBrokerFailed(msg) => {
                 TylError::network(format!("Pact broker communication failed: {msg}"))
             }
-            ValidationError::VersionMismatch { expected, found } => {
-                TylError::validation("version", format!("Contract version mismatch: expected {expected}, found {found}"))
-            }
+            ValidationError::VersionMismatch { expected, found } => TylError::validation(
+                "version",
+                format!("Contract version mismatch: expected {expected}, found {found}"),
+            ),
         }
     }
 }
@@ -85,7 +89,7 @@ mod tests {
     fn test_validation_error_conversion() {
         let validation_error = ValidationError::NoConsumersRegistered("test.event".to_string());
         let tyl_error: TylError = validation_error.into();
-        
+
         // Should convert to TylError properly
         assert!(tyl_error.to_string().contains("No consumers registered"));
     }
@@ -98,7 +102,7 @@ mod tests {
         ];
         let validation_error = ValidationError::SchemaValidationFailed { errors };
         let tyl_error: TylError = validation_error.into();
-        
+
         let error_message = tyl_error.to_string();
         assert!(error_message.contains("Field 'id' is required"));
         assert!(error_message.contains("Field 'value' must be positive"));
@@ -111,7 +115,7 @@ mod tests {
             found: "v1".to_string(),
         };
         let tyl_error: TylError = validation_error.into();
-        
+
         let error_message = tyl_error.to_string();
         assert!(error_message.contains("expected v2"));
         assert!(error_message.contains("found v1"));
