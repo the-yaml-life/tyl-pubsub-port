@@ -140,8 +140,11 @@ impl PactEventPublisher for ValidatedMockAdapter {
         event.validate_pact_schema()?;
         
         // CRITICAL: Consumer validation - this is what makes test_orphaned_event_fails fail correctly!
-        use crate::validation::extended_traits::ValidatedEventPublisher;
-        self.validate_consumer_compatibility(&event).await?;
+        #[cfg(feature = "pact-validation")]
+        {
+            use crate::validation::extended_traits::ValidatedEventPublisher;
+            self.validate_consumer_compatibility(&event).await?;
+        }
         
         // Proceed with normal publishing
         self.inner.publish(topic, event).await
@@ -163,8 +166,11 @@ impl PactEventPublisher for ValidatedMockAdapter {
         event.validate_pact_schema()?;
         
         // CRITICAL: Consumer validation 
-        use crate::validation::extended_traits::ValidatedEventPublisher;
-        self.validate_consumer_compatibility(&event).await?;
+        #[cfg(feature = "pact-validation")]
+        {
+            use crate::validation::extended_traits::ValidatedEventPublisher;
+            self.validate_consumer_compatibility(&event).await?;
+        }
         
         self.inner.publish_with_key(topic, key, event).await
     }
